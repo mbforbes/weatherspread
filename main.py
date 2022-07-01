@@ -49,11 +49,11 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
         all_data.append((year, year_data))
 
     # render
-    # key = "tempmax"  # alt: "feelslikemax"
-    key = "feelslikemax"  # alt: "feelslikemax"
+    key = "tempmax"  # alt: "feelslikemax"
+    # key = "feelslikemax"  # alt: "tempmax"
 
     buf = []
-    buf.append(f"<h2>{location_display}</h2>")
+    buf.append(f"<h2 class='mt5'>{location_display}</h2>")
     prev_year = None
     for year, year_data in all_data:
         buf.append("<div>")
@@ -67,7 +67,12 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
                     else ("red" if temp > 90 else ("yellow" if temp > 70 else "blue"))
                 )
                 buf.append(
-                    f'<div style="width: 10px; height: {temp}px" class="bg-{color} dib"></div>'
+                    f'<div style="width: 10px; height: {temp}px" class="bg-{color} dib mb0"></div>'
+                )
+            buf.append("<br class='mv0'>")
+            for day in data["days"]:
+                buf.append(
+                    f"<span class='b dib' style='width: 10px; font-size: 7px;'>{round(day[key])}</span>"
                 )
             # year, month, _ = start_date.split("-")
             buf.append(
@@ -79,13 +84,56 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
     return "\n".join(buf)
 
 
-buf = []
+def build_page():
+    buf = []
 
-buf.append(get_place_html("Belgrade, Serbia"))
-buf.append(get_place_html("Bucharest, Romania"))
-buf.append(get_place_html("Sarajevo, Bosnia"))
-buf.append(get_place_html("Tirana, Albania"))
-# buf.append(get_place_html("Tbilisi, Georgia"))
+    buf.append(get_place_html("Belgrade, Serbia"))
+    buf.append(get_place_html("Bucharest, Romania"))
+    buf.append(get_place_html("Sarajevo, Bosnia"))
+    buf.append(get_place_html("Tirana, Albania"))
+    # buf.append(get_place_html("Tbilisi, Georgia"))
 
-templ_main = Template(read("templates/main.html"))
-write("output/tester.html", templ_main.render(content="\n".join(buf)))
+    templ_main = Template(read("templates/main.html"))
+    write("output/tester.html", templ_main.render(content="\n".join(buf)))
+
+
+def test_meteostat():
+    from meteostat import Point, Daily
+    from datetime import datetime
+
+    # lat, lon = 41.330432, 19.816776  # tirana, albania
+    # lat, lon = 44.812596, 20.461405  # belgrade, serbia
+    lat, lon = 47.608162, -122.336970  # seattle, wa
+    loc = Point(lat, lon)
+    start = datetime(2019, 3, 1)
+    end = datetime(2019, 3, 30)
+
+    # Get daily data
+    data = Daily(loc, start, end)
+    data = data.fetch()
+    print(data)
+
+    # code.interact(local=dict(globals(), **locals()))
+
+    # works! seems pretty accurate. though precipitation sometimes missing (e.g., for
+    # albania)...
+
+
+def test_geopy_nominatim():
+    from geopy.geocoders import Nominatim
+
+    address = "Seattle, USA"
+    geolocator = Nominatim(user_agent="Max Forbes")
+    location = geolocator.geocode(address)
+    print(location.address)
+    print((location.latitude, location.longitude))
+    # Barcelona, Barcelonès, Barcelona, Catalunya, 08001, España
+    # (41.3828939, 2.1774322)
+
+    # works!
+
+
+if __name__ == "__main__":
+    # build_page()
+    # test_meteostat()
+    test_geopy_nominatim()
