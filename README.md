@@ -30,6 +30,18 @@ Free 1500 "units" / month (unclear if amt of data for a unit is entirety of a re
 Update: woof, this gets burned quick, when 1 record = 1 day.
 
 
-## Temp
+## Display
 
-TODO: What is "feelslike"? Is it standardized? Should I use it instead?
+- Temp: TODO: What is "feelslike"? Is it standardized? Should I use it instead?
+- Precipitation: might want to show as well.
+- Averages: could do, but honestly might not be worth it
+
+
+## Free API alternatives
+
+Since weather data is collected by governments and released for free (as far as I can tell, granted with no extra research and just reading between the lines), it's kind of lame a bunch of near-duplicate web services have sprung up to sell you access to this free data behind their own paid APIs.
+
+Searching a bit, there's a Python interface to some weather data dumps. It requires (lat, lon) coordinates, so using another library that interfaces w/ OpenStreetMap (I think) to resolve names. NB: Looks like this kind of name resolution, where you go from place name to geo coordinate, is called _geocoding._ Cool.
+
+- [`meteostat`](https://dev.meteostat.net/python/) provides access to historical weather data
+- [`geopy`](https://github.com/geopy/geopy) w/ [`Nominatim`](https://nominatim.org/) does geocoding
