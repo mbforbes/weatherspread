@@ -1,0 +1,8 @@
+black
+mypy
+tqdm
+rich
+requests
+types-requests
+mbforbes_python_utils
+Jinja2
