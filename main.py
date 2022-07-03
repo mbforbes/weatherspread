@@ -1,22 +1,38 @@
 import calendar
 import code
+from datetime import datetime
 import json
 import os
+from typing import List, Tuple
 
+from geopy.geocoders import Nominatim
 from jinja2 import Template
 from mbforbes_python_utils import read, write
+from meteostat import Point, Daily
+import pandas as pd
 import requests
 
-# global settings
-api_key = read("secrets/visualcrossing_api_key.txt")
-# print(api_key)
-base_url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"
-unit_group = "us"  # vs metric
-content_type = "json"
-include = "days"
+""" (location name, [(year, [(month, [temp1, temp2, ...], [precip, precip2, ...])])]"""
+Data = Tuple[str, List[Tuple[int, List[Tuple[int, List[float], List[float]]]]]]
 
 
-def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 2021]):
+def get_data_vc(
+    location_display: str,
+    temperature_key: str,
+    months=[8, 9, 10],
+    years=[2019, 2020, 2021],
+) -> Data:
+    """Uses visualcrossing.
+    temperature_key: "tempmax" or "feelslikemax"
+    """
+    # global settings
+    api_key = read("secrets/visualcrossing_api_key.txt")
+    # print(api_key)
+    base_url = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"
+    unit_group = "us"  # vs metric
+    content_type = "json"
+    include = "days"
+
     all_data = []
     for year in years:
         year_data = []
@@ -29,7 +45,9 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
             start_date = f"{year}-{month}-01"  # inclusive
             end_date = f"{year}-{month}-{last_month_day}"  # inclusive
 
-            cache_path = "cache/" + "_".join([location, start_date, end_date]) + ".json"
+            cache_path = (
+                "cache/vc/" + "_".join([location, start_date, end_date]) + ".json"
+            )
             if os.path.exists(cache_path):
                 print("Cached data found")
                 data = json.loads(read(cache_path))
@@ -45,8 +63,72 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
                     json.dump(data, f)
 
             # now, weather is in obj data. type given in doc/response.py
-            year_data.append((month, data))
+            year_data.append(
+                (
+                    month,
+                    [day[temperature_key] for day in data["days"]],
+                    [day["precip"] for day in data["days"]],  # inches
+                )
+            )
         all_data.append((year, year_data))
+    return (location_display, all_data)
+
+
+def get_data_ms(
+    location_display: str, months=[8, 9, 10], years=[2019, 2020, 2021]
+) -> Data:
+    """Uses meteostat (and geopy's nominatim).
+    key: "tempmax" or "feelslikemax"
+    """
+    # get lat, lon
+    position = Nominatim(user_agent="Max Forbes").geocode(location_display)
+    lat, lon = position.latitude, position.longitude
+
+    # check cache
+    location_cache = location_display.replace(" ", "")
+
+    all_data = []
+    for year in years:
+        year_data = []
+        for month in months:
+            last_month_day = calendar.monthrange(year, month)[1]
+            start_date = f"{year}-{month}-01"  # inclusive
+            end_date = f"{year}-{month}-{last_month_day}"  # inclusive
+
+            cache_path = (
+                "cache/ms/" + "_".join([location_cache, start_date, end_date]) + ".csv"
+            )
+            if os.path.exists(cache_path):
+                print("Cached data found")
+                data = pd.read_csv(cache_path)
+            else:
+                print("Requesting data")
+                data = Daily(
+                    Point(lat, lon),
+                    datetime(year, month, 1),
+                    datetime(year, month, last_month_day),
+                ).fetch()
+                print("Saving to cache")
+                data.to_csv(cache_path)
+
+            # print(year, month)
+            # code.interact(local=dict(globals(), **locals()))
+
+            year_data.append(
+                (
+                    month,
+                    (data.tmax.fillna(0) * 1.8 + 32).tolist(),
+                    # NOTE: Not sure about unit, maybe ml? so -> inches?
+                    (data.prcp.fillna(0) * 0.0610237).tolist(),
+                )
+            )
+
+        all_data.append((year, year_data))
+    return (location_display, all_data)
+
+
+def render_data(full_data: Data) -> str:
+    location_display, all_data = full_data
 
     # render
     key = "tempmax"  # alt: "feelslikemax"
@@ -57,10 +139,9 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
     prev_year = None
     for year, year_data in all_data:
         buf.append("<div>")
-        for month, data in year_data:
+        for month, temps, precips in year_data:
             buf.append("<div class='dib mr3'>")
-            for day in data["days"]:
-                temp = day[key]
+            for temp in temps:
                 color = (
                     "dark-red"
                     if temp > 100
@@ -70,10 +151,17 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
                     f'<div style="width: 10px; height: {temp}px" class="bg-{color} dib mb0"></div>'
                 )
             buf.append("<br class='mv0'>")
-            for day in data["days"]:
+            for temp in temps:
                 buf.append(
-                    f"<span class='b dib' style='width: 10px; font-size: 7px;'>{round(day[key])}</span>"
+                    f"<span class='b dib' style='width: 10px; font-size: 7px;'>{round(temp)}</span>"
                 )
+            buf.append("<br><div>")
+            for precip in precips:
+                buf.append(
+                    f'<div style="width: 10px; height: {precip * 10}px" class="bg-blue dib mb0 v-top"></div>'
+                )
+            buf.append("</div>")
+
             # year, month, _ = start_date.split("-")
             buf.append(
                 f"<h3 class='mt1 mb3 tc gray'>{calendar.month_name[month]}, {year}</h3>"
@@ -84,56 +172,45 @@ def get_place_html(location_display: str, months=[8, 9, 10], years=[2019, 2020, 
     return "\n".join(buf)
 
 
-def build_page():
+def build_page_vc():
     buf = []
 
-    buf.append(get_place_html("Belgrade, Serbia"))
-    buf.append(get_place_html("Bucharest, Romania"))
-    buf.append(get_place_html("Sarajevo, Bosnia"))
-    buf.append(get_place_html("Tirana, Albania"))
+    buf.append(render_data(get_data_vc("Belgrade, Serbia", "tempmax")))
+    buf.append(render_data(get_data_vc("Bucharest, Romania", "tempmax")))
+    buf.append(render_data(get_data_vc("Sarajevo, Bosnia", "tempmax")))
+    buf.append(render_data(get_data_vc("Tirana, Albania", "tempmax")))
     # buf.append(get_place_html("Tbilisi, Georgia"))
 
     templ_main = Template(read("templates/main.html"))
-    write("output/tester.html", templ_main.render(content="\n".join(buf)))
+    write("output/tester-vc.html", templ_main.render(content="\n".join(buf)))
 
 
-def test_meteostat():
-    from meteostat import Point, Daily
-    from datetime import datetime
+def build_page_ms():
+    buf = []
 
-    # lat, lon = 41.330432, 19.816776  # tirana, albania
-    # lat, lon = 44.812596, 20.461405  # belgrade, serbia
-    lat, lon = 47.608162, -122.336970  # seattle, wa
-    loc = Point(lat, lon)
-    start = datetime(2019, 3, 1)
-    end = datetime(2019, 3, 30)
+    buf.append(render_data(get_data_ms("Belgrade, Serbia")))
+    buf.append(render_data(get_data_ms("Bucharest, Romania")))
+    buf.append(render_data(get_data_ms("Sarajevo, Bosnia")))
+    buf.append(render_data(get_data_ms("Tirana, Albania")))
+    buf.append(render_data(get_data_ms("Tbilisi, Georgia")))
+    buf.append(render_data(get_data_ms("Edinburgh, Scotland")))
+    buf.append(render_data(get_data_ms("Kathmandu, Nepal")))
+    buf.append(render_data(get_data_ms("Seoul, South Korea", [8, 9, 10, 11])))
+    buf.append(render_data(get_data_ms("Sapporo, Japan", [8, 9, 10, 11])))
+    buf.append(render_data(get_data_ms("Tokyo, Japan", [8, 9, 10, 11])))
+    buf.append(render_data(get_data_ms("Miyazaki, Japan", [8, 9, 10, 11])))
+    buf.append(render_data(get_data_ms("Istanbul, Turkey")))
+    buf.append(render_data(get_data_ms("Skopje, North Macedonia")))
+    buf.append(render_data(get_data_ms("Tel Aviv, Israel")))
+    buf.append(render_data(get_data_ms("Tashkent, Uzbekistan")))
+    buf.append(render_data(get_data_ms("Montpellier, France", [7, 8, 9])))
 
-    # Get daily data
-    data = Daily(loc, start, end)
-    data = data.fetch()
-    print(data)
-
-    # code.interact(local=dict(globals(), **locals()))
-
-    # works! seems pretty accurate. though precipitation sometimes missing (e.g., for
-    # albania)...
-
-
-def test_geopy_nominatim():
-    from geopy.geocoders import Nominatim
-
-    address = "Seattle, USA"
-    geolocator = Nominatim(user_agent="Max Forbes")
-    location = geolocator.geocode(address)
-    print(location.address)
-    print((location.latitude, location.longitude))
-    # Barcelona, Barcelonès, Barcelona, Catalunya, 08001, España
-    # (41.3828939, 2.1774322)
-
-    # works!
+    templ_main = Template(read("templates/main.html"))
+    write("output/tester-ms.html", templ_main.render(content="\n".join(buf)))
 
 
 if __name__ == "__main__":
-    # build_page()
-    # test_meteostat()
-    test_geopy_nominatim()
+    os.makedirs("cache/vc/", exist_ok=True)
+    os.makedirs("cache/ms/", exist_ok=True)
+    # build_page_vc()
+    build_page_ms()

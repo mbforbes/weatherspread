@@ -8,3 +8,4 @@ mbforbes_python_utils
 Jinja2
 meteostat
 geopy
+pandas
