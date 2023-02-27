@@ -19,8 +19,8 @@ Data = Tuple[str, List[Tuple[int, List[Tuple[int, List[float], List[float]]]]]]
 def get_data_vc(
     location_display: str,
     temperature_key: str,
-    months=[8, 9, 10],
-    years=[2019, 2020, 2021],
+    months=[2, 3],
+    years=[2020, 2021, 2022],
 ) -> Data:
     """Uses visualcrossing.
     temperature_key: "tempmax" or "feelslikemax"
@@ -75,7 +75,9 @@ def get_data_vc(
 
 
 def get_data_ms(
-    location_display: str, months=[8, 9, 10], years=[2019, 2020, 2021]
+    location_display: str,
+    months=[2, 3],
+    years=[2020, 2021, 2022],
 ) -> Data:
     """Uses meteostat (and geopy's nominatim).
     key: "tempmax" or "feelslikemax"
@@ -188,22 +190,39 @@ def build_page_vc():
 def build_page_ms():
     buf = []
 
-    buf.append(render_data(get_data_ms("Belgrade, Serbia")))
-    buf.append(render_data(get_data_ms("Bucharest, Romania")))
-    buf.append(render_data(get_data_ms("Sarajevo, Bosnia")))
-    buf.append(render_data(get_data_ms("Tirana, Albania")))
-    buf.append(render_data(get_data_ms("Tbilisi, Georgia")))
-    buf.append(render_data(get_data_ms("Edinburgh, Scotland")))
-    buf.append(render_data(get_data_ms("Kathmandu, Nepal")))
-    buf.append(render_data(get_data_ms("Seoul, South Korea", [8, 9, 10, 11])))
-    buf.append(render_data(get_data_ms("Sapporo, Japan", [8, 9, 10, 11])))
-    buf.append(render_data(get_data_ms("Tokyo, Japan", [8, 9, 10, 11])))
-    buf.append(render_data(get_data_ms("Miyazaki, Japan", [8, 9, 10, 11])))
-    buf.append(render_data(get_data_ms("Istanbul, Turkey")))
-    buf.append(render_data(get_data_ms("Skopje, North Macedonia")))
-    buf.append(render_data(get_data_ms("Tel Aviv, Israel")))
-    buf.append(render_data(get_data_ms("Tashkent, Uzbekistan")))
-    buf.append(render_data(get_data_ms("Montpellier, France", [7, 8, 9])))
+    # buf.append(render_data(get_data_ms("Zagreb, Croatia")))
+    # buf.append(render_data(get_data_ms("Belgrade, Serbia")))
+    # buf.append(render_data(get_data_ms("Bucharest, Romania")))
+    # buf.append(render_data(get_data_ms("Sarajevo, Bosnia")))
+    # buf.append(render_data(get_data_ms("Tirana, Albania")))
+    # buf.append(render_data(get_data_ms("Tbilisi, Georgia")))
+    # buf.append(render_data(get_data_ms("Skopje, North Macedonia")))
+    # buf.append(render_data(get_data_ms("Tel Aviv, Israel")))
+    # buf.append(render_data(get_data_ms("Edinburgh, Scotland")))
+    # buf.append(render_data(get_data_ms("Kathmandu, Nepal")))
+    # buf.append(render_data(get_data_ms("Seoul, South Korea", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms("Sapporo, Japan", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms("Tokyo, Japan", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms("Miyazaki, Japan", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms("Istanbul, Turkey")))
+    # buf.append(render_data(get_data_ms("Tashkent, Uzbekistan")))
+    # buf.append(render_data(get_data_ms("Montpellier, France", [7, 8, 9])))
+    # buf.append(render_data(get_data_ms("Ulaanbaatar, Mongolia")))
+    # buf.append(render_data(get_data_ms("Dalanzadgad, Mongolia")))
+
+    # buf.append(render_data(get_data_ms("Hanoi, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms("Haiphong, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms("Sa Pa, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms("Da Nang, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms("Hoi An, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms("Ho Chi Minh City, Vietnam", [11, 1])))
+
+    # buf.append(render_data(get_data_ms("Taipei, Taiwan")))
+
+    buf.append(render_data(get_data_ms("Okinawa, Japan", [4, 5, 6])))
+    buf.append(render_data(get_data_ms("Fukuoka, Japan", [4, 5, 6])))
+    buf.append(render_data(get_data_ms("Osaka, Japan", [4, 5, 6])))
+    buf.append(render_data(get_data_ms("Tokyo, Japan", [4, 5, 6])))
 
     templ_main = Template(read("templates/main.html"))
     write("output/tester-ms.html", templ_main.render(content="\n".join(buf)))
