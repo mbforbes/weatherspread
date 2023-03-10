@@ -1,5 +1,16 @@
 # weatherspread
 
+## usage
+
+```bash
+# create new python virtual env. I recommend `pyenv`. then:
+pip install -r requirements.txt
+# edit main.py for places as desired. then:
+python main.py
+# output written to output/tester-ms.html. open, e.g., on macOS:
+open output/tester-ms.html
+```
+
 ## APIs
 
 From this [list of public APIs](https://github.com/public-apis/public-apis#weather), four candidates listed as providing historical data:

@@ -3,7 +3,7 @@ import code
 from datetime import datetime
 import json
 import os
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from geopy.geocoders import Nominatim
 from jinja2 import Template
@@ -14,6 +14,10 @@ import requests
 
 """ (location name, [(year, [(month, [temp1, temp2, ...], [precip, precip2, ...])])]"""
 Data = Tuple[str, List[Tuple[int, List[Tuple[int, List[float], List[float]]]]]]
+
+# format {"Display Name": [lat, lon], ...}
+LOCATION_CACHE_PATH = "cache/locations.json"
+LocationCache = Dict[str, Tuple[float, float]]
 
 
 def get_data_vc(
@@ -74,20 +78,29 @@ def get_data_vc(
     return (location_display, all_data)
 
 
+def location2latlon(lc: LocationCache, display_name: str) -> Tuple[float, float]:
+    """Cache-aware. uses Nominatim to fetch if unknown."""
+    if display_name in lc:
+        return lc[display_name]
+    position = Nominatim(user_agent=os.getlogin()).geocode(display_name)
+    lat, lon = position.latitude, position.longitude
+    lc[display_name] = (lat, lon)
+    return (lat, lon)
+
+
 def get_data_ms(
-    location_display: str,
+    lc: LocationCache,
+    location_display_name: str,
     months=[2, 3],
     years=[2020, 2021, 2022],
 ) -> Data:
     """Uses meteostat (and geopy's nominatim).
     key: "tempmax" or "feelslikemax"
     """
-    # get lat, lon
-    position = Nominatim(user_agent="Max Forbes").geocode(location_display)
-    lat, lon = position.latitude, position.longitude
+    lat, lon = location2latlon(lc, location_display_name)
 
     # check cache
-    location_cache = location_display.replace(" ", "")
+    location_cache_name = location_display_name.replace(" ", "")
 
     all_data = []
     for year in years:
@@ -98,7 +111,9 @@ def get_data_ms(
             end_date = f"{year}-{month}-{last_month_day}"  # inclusive
 
             cache_path = (
-                "cache/ms/" + "_".join([location_cache, start_date, end_date]) + ".csv"
+                "cache/ms/"
+                + "_".join([location_cache_name, start_date, end_date])
+                + ".csv"
             )
             if os.path.exists(cache_path):
                 print("Cached data found")
@@ -126,7 +141,7 @@ def get_data_ms(
             )
 
         all_data.append((year, year_data))
-    return (location_display, all_data)
+    return (location_display_name, all_data)
 
 
 def render_data(full_data: Data) -> str:
@@ -157,10 +172,10 @@ def render_data(full_data: Data) -> str:
                 buf.append(
                     f"<span class='b dib' style='width: 10px; font-size: 7px;'>{round(temp)}</span>"
                 )
-            buf.append("<br><div>")
+            buf.append('<br><div style="height: 50px;">')
             for precip in precips:
                 buf.append(
-                    f'<div style="width: 10px; height: {precip * 10}px" class="bg-blue dib mb0 v-top"></div>'
+                    f'<div style="width: 10px; height: {precip * 10}px" class="bg-blue dib mb0 v-top o-80"></div>'
                 )
             buf.append("</div>")
 
@@ -187,49 +202,60 @@ def build_page_vc():
     write("output/tester-vc.html", templ_main.render(content="\n".join(buf)))
 
 
-def build_page_ms():
+def build_page_ms(lc: LocationCache):
     buf = []
 
-    # buf.append(render_data(get_data_ms("Zagreb, Croatia")))
-    # buf.append(render_data(get_data_ms("Belgrade, Serbia")))
-    # buf.append(render_data(get_data_ms("Bucharest, Romania")))
-    # buf.append(render_data(get_data_ms("Sarajevo, Bosnia")))
-    # buf.append(render_data(get_data_ms("Tirana, Albania")))
-    # buf.append(render_data(get_data_ms("Tbilisi, Georgia")))
-    # buf.append(render_data(get_data_ms("Skopje, North Macedonia")))
-    # buf.append(render_data(get_data_ms("Tel Aviv, Israel")))
-    # buf.append(render_data(get_data_ms("Edinburgh, Scotland")))
-    # buf.append(render_data(get_data_ms("Kathmandu, Nepal")))
-    # buf.append(render_data(get_data_ms("Seoul, South Korea", [8, 9, 10, 11])))
-    # buf.append(render_data(get_data_ms("Sapporo, Japan", [8, 9, 10, 11])))
-    # buf.append(render_data(get_data_ms("Tokyo, Japan", [8, 9, 10, 11])))
-    # buf.append(render_data(get_data_ms("Miyazaki, Japan", [8, 9, 10, 11])))
-    # buf.append(render_data(get_data_ms("Istanbul, Turkey")))
-    # buf.append(render_data(get_data_ms("Tashkent, Uzbekistan")))
-    # buf.append(render_data(get_data_ms("Montpellier, France", [7, 8, 9])))
-    # buf.append(render_data(get_data_ms("Ulaanbaatar, Mongolia")))
-    # buf.append(render_data(get_data_ms("Dalanzadgad, Mongolia")))
+    # buf.append(render_data(get_data_ms(lc, "Zagreb, Croatia")))
+    # buf.append(render_data(get_data_ms(lc, "Belgrade, Serbia")))
+    # buf.append(render_data(get_data_ms(lc, "Bucharest, Romania")))
+    # buf.append(render_data(get_data_ms(lc, "Sarajevo, Bosnia")))
+    # buf.append(render_data(get_data_ms(lc, "Tirana, Albania")))
+    # buf.append(render_data(get_data_ms(lc, "Tbilisi, Georgia")))
+    # buf.append(render_data(get_data_ms(lc, "Skopje, North Macedonia")))
+    # buf.append(render_data(get_data_ms(lc, "Tel Aviv, Israel")))
+    # buf.append(render_data(get_data_ms(lc, "Edinburgh, Scotland")))
+    # buf.append(render_data(get_data_ms(lc, "Kathmandu, Nepal")))
+    # buf.append(render_data(get_data_ms(lc, "Seoul, South Korea", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms(lc, "Sapporo, Japan", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms(lc, "Tokyo, Japan", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms(lc, "Miyazaki, Japan", [8, 9, 10, 11])))
+    # buf.append(render_data(get_data_ms(lc, "Istanbul, Turkey")))
+    # buf.append(render_data(get_data_ms(lc, "Tashkent, Uzbekistan")))
+    # buf.append(render_data(get_data_ms(lc, "Montpellier, France", [7, 8, 9])))
+    # buf.append(render_data(get_data_ms(lc, "Ulaanbaatar, Mongolia")))
+    # buf.append(render_data(get_data_ms(lc, "Dalanzadgad, Mongolia")))
 
-    # buf.append(render_data(get_data_ms("Hanoi, Vietnam", [11, 1])))
-    # buf.append(render_data(get_data_ms("Haiphong, Vietnam", [11, 1])))
-    # buf.append(render_data(get_data_ms("Sa Pa, Vietnam", [11, 1])))
-    # buf.append(render_data(get_data_ms("Da Nang, Vietnam", [11, 1])))
-    # buf.append(render_data(get_data_ms("Hoi An, Vietnam", [11, 1])))
-    # buf.append(render_data(get_data_ms("Ho Chi Minh City, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms(lc, "Hanoi, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms(lc, "Haiphong, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms(lc, "Sa Pa, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms(lc, "Da Nang, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms(lc, "Hoi An, Vietnam", [11, 1])))
+    # buf.append(render_data(get_data_ms(lc, "Ho Chi Minh City, Vietnam", [11, 1])))
 
-    # buf.append(render_data(get_data_ms("Taipei, Taiwan")))
+    # buf.append(render_data(get_data_ms(lc, "Taipei, Taiwan")))
 
-    buf.append(render_data(get_data_ms("Okinawa, Japan", [4, 5, 6])))
-    buf.append(render_data(get_data_ms("Fukuoka, Japan", [4, 5, 6])))
-    buf.append(render_data(get_data_ms("Osaka, Japan", [4, 5, 6])))
-    buf.append(render_data(get_data_ms("Tokyo, Japan", [4, 5, 6])))
+    # buf.append(render_data(get_data_ms(lc, "Okinawa, Japan", [4, 5, 6])))
+    buf.append(render_data(get_data_ms(lc, "Fukuoka, Japan", [4, 5])))
+    buf.append(render_data(get_data_ms(lc, "Osaka, Japan", [4, 5, 6])))
+    buf.append(render_data(get_data_ms(lc, "Tokyo, Japan", [4, 5, 6])))
 
     templ_main = Template(read("templates/main.html"))
     write("output/tester-ms.html", templ_main.render(content="\n".join(buf)))
 
 
+def ensure_file(path: str, default_contents: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.isfile(path):
+        write(path, default_contents, False)
+
+
 if __name__ == "__main__":
     os.makedirs("cache/vc/", exist_ok=True)
     os.makedirs("cache/ms/", exist_ok=True)
+    ensure_file(LOCATION_CACHE_PATH, "{}\n")
+    lc: LocationCache = json.loads(read(LOCATION_CACHE_PATH))
+
     # build_page_vc()
-    build_page_ms()
+    build_page_ms(lc)
+
+    write(LOCATION_CACHE_PATH, json.dumps(lc), False)
